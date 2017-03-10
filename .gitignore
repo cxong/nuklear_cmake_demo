@@ -47,6 +47,7 @@ Testing/
 install_manifest_Runtime.txt
 *.deb
 *.rpm
+CMakeScripts/
 
 # Visual Studio
 Debug/
@@ -66,3 +67,6 @@ Win32/
 *.ilk
 *.pdb
 *.VC.*
+
+# OS X / Xcode
+*.xcodeproj/

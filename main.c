@@ -10,7 +10,6 @@
 #include <limits.h>
 #include <time.h>
 
-#include <GL/glew.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 
@@ -22,12 +21,12 @@
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_IMPLEMENTATION
-#define NK_SDL_GL3_IMPLEMENTATION
+#define NK_SDL_GL2_IMPLEMENTATION
 #include "nuklear.h"
-#include "nuklear_sdl_gl3.h"
+#include "nuklear_sdl_gl2.h"
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1200
+#define WINDOW_HEIGHT 800
 
 #define MAX_VERTEX_MEMORY 512 * 1024
 #define MAX_ELEMENT_MEMORY 128 * 1024
@@ -70,26 +69,19 @@ main(int argc, char* argv[])
 
     /* SDL setup */
     SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
-    SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER|SDL_INIT_EVENTS);
-    SDL_GL_SetAttribute (SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-    SDL_GL_SetAttribute (SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_Init(SDL_INIT_VIDEO);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
     win = SDL_CreateWindow("Demo",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN|SDL_WINDOW_ALLOW_HIGHDPI);
     glContext = SDL_GL_CreateContext(win);
     SDL_GetWindowSize(win, &win_width, &win_height);
 
-    /* OpenGL setup */
-    glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-    glewExperimental = 1;
-    if (glewInit() != GLEW_OK) {
-        fprintf(stderr, "Failed to setup GLEW\n");
-        exit(1);
-    }
-
+    /* GUI */
     ctx = nk_sdl_init(win);
     /* Load Fonts: if none of these are loaded a default font will be used  */
     /* Load Cursor: if you uncomment cursor loading please hide the cursor */
@@ -123,35 +115,15 @@ main(int argc, char* argv[])
         }
         nk_input_end(ctx);
 
-
         /* GUI */
-        if (nk_begin(ctx, "Demo", nk_rect(50, 50, 200, 200),
+        if (nk_begin(ctx, "Demo", nk_rect(50, 50, 210, 250),
             NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
-            NK_WINDOW_CLOSABLE|NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
+            NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
         {
-            nk_menubar_begin(ctx);
-            nk_layout_row_begin(ctx, NK_STATIC, 25, 2);
-            nk_layout_row_push(ctx, 45);
-            if (nk_menu_begin_label(ctx, "FILE", NK_TEXT_LEFT, nk_vec2(120, 200))) {
-                nk_layout_row_dynamic(ctx, 30, 1);
-                nk_menu_item_label(ctx, "OPEN", NK_TEXT_LEFT);
-                nk_menu_item_label(ctx, "CLOSE", NK_TEXT_LEFT);
-                nk_menu_end(ctx);
-            }
-            nk_layout_row_push(ctx, 45);
-            if (nk_menu_begin_label(ctx, "EDIT", NK_TEXT_LEFT, nk_vec2(120, 200))) {
-                nk_layout_row_dynamic(ctx, 30, 1);
-                nk_menu_item_label(ctx, "COPY", NK_TEXT_LEFT);
-                nk_menu_item_label(ctx, "CUT", NK_TEXT_LEFT);
-                nk_menu_item_label(ctx, "PASTE", NK_TEXT_LEFT);
-                nk_menu_end(ctx);
-            }
-            nk_layout_row_end(ctx);
-            nk_menubar_end(ctx);
-
             enum {EASY, HARD};
             static int op = EASY;
             static int property = 20;
+
             nk_layout_row_static(ctx, 30, 80, 1);
             if (nk_button_label(ctx, "button"))
                 fprintf(stdout, "button pressed\n");
@@ -160,6 +132,20 @@ main(int argc, char* argv[])
             if (nk_option_label(ctx, "hard", op == HARD)) op = HARD;
             nk_layout_row_dynamic(ctx, 25, 1);
             nk_property_int(ctx, "Compression:", 0, &property, 100, 10, 1);
+
+            nk_layout_row_dynamic(ctx, 20, 1);
+            nk_label(ctx, "background:", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(ctx, 25, 1);
+            if (nk_combo_begin_color(ctx, background, nk_vec2(nk_widget_width(ctx),400))) {
+                nk_layout_row_dynamic(ctx, 120, 1);
+                background = nk_color_picker(ctx, background, NK_RGBA);
+                nk_layout_row_dynamic(ctx, 25, 1);
+                background.r = (nk_byte)nk_propertyi(ctx, "#R:", 0, background.r, 255, 1,1);
+                background.g = (nk_byte)nk_propertyi(ctx, "#G:", 0, background.g, 255, 1,1);
+                background.b = (nk_byte)nk_propertyi(ctx, "#B:", 0, background.b, 255, 1,1);
+                background.a = (nk_byte)nk_propertyi(ctx, "#A:", 0, background.a, 255, 1,1);
+                nk_combo_end(ctx);
+            }
         }
         nk_end(ctx);
 
@@ -192,3 +178,4 @@ cleanup:
     SDL_Quit();
     return 0;
 }
+
