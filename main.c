@@ -11,11 +11,11 @@
 #include <time.h>
 
 #include <SDL.h>
+#include <SDL_image.h>
 #include <SDL_opengl.h>
 
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_STANDARD_IO
-#define NK_INCLUDE_STANDARD_VARARGS
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
 #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
 #define NK_INCLUDE_FONT_BAKING
@@ -38,28 +38,26 @@
 
 /* ===============================================================
  *
- *                          EXAMPLE
- *
- * ===============================================================*/
-/* This are some code examples to provide a small overview of what can be
- * done with this library. To try out an example uncomment the include
- * and the corresponding function. */
-/*#include "../style.c"*/
-/*#include "../calculator.c"*/
-/*#include "../overview.c"*/
-/*#include "../node_editor.c"*/
-
-/* ===============================================================
- *
  *                          DEMO
  *
  * ===============================================================*/
+static GLuint load_image_tex(const char *filename);
+static void draw_tex(
+	GLuint texid, const float x, const float y, const float w, const float h);
 int
 main(int argc, char* argv[])
 {
+	// Check args
+	if (argc != 2)
+	{
+		printf("Usage: nuklear_sdl_gl2_cmake <filename>\n");
+		return 0;
+	}
+
     /* Platform */
     SDL_Window *win;
     SDL_GLContext glContext;
+	GLuint tex;
     struct nk_color background;
     int win_width, win_height;
     int running = 1;
@@ -68,7 +66,7 @@ main(int argc, char* argv[])
     struct nk_context *ctx;
 
     /* SDL setup */
-    SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
+    SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "1");
     SDL_Init(SDL_INIT_VIDEO);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -77,31 +75,29 @@ main(int argc, char* argv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
     win = SDL_CreateWindow("Demo",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN|SDL_WINDOW_ALLOW_HIGHDPI);
-    glContext = SDL_GL_CreateContext(win);
+        WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
     SDL_GetWindowSize(win, &win_width, &win_height);
+    glContext = SDL_GL_CreateContext(win);
+	glEnable(GL_TEXTURE_2D);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	tex = load_image_tex(argv[1]);
+	if (tex == 0)
+	{
+		goto cleanup;
+	}
 
     /* GUI */
     ctx = nk_sdl_init(win);
+
     /* Load Fonts: if none of these are loaded a default font will be used  */
     /* Load Cursor: if you uncomment cursor loading please hide the cursor */
     {struct nk_font_atlas *atlas;
     nk_sdl_font_stash_begin(&atlas);
-    /*struct nk_font *droid = nk_font_atlas_add_from_file(atlas, "../../../extra_font/DroidSans.ttf", 14, 0);*/
-    /*struct nk_font *roboto = nk_font_atlas_add_from_file(atlas, "../../../extra_font/Roboto-Regular.ttf", 16, 0);*/
-    /*struct nk_font *future = nk_font_atlas_add_from_file(atlas, "../../../extra_font/kenvector_future_thin.ttf", 13, 0);*/
-    /*struct nk_font *clean = nk_font_atlas_add_from_file(atlas, "../../../extra_font/ProggyClean.ttf", 12, 0);*/
-    /*struct nk_font *tiny = nk_font_atlas_add_from_file(atlas, "../../../extra_font/ProggyTiny.ttf", 10, 0);*/
-    /*struct nk_font *cousine = nk_font_atlas_add_from_file(atlas, "../../../extra_font/Cousine-Regular.ttf", 13, 0);*/
     nk_sdl_font_stash_end();
     /*nk_style_load_all_cursors(ctx, atlas->cursors);*/
     /*nk_style_set_font(ctx, &roboto->handle)*/;}
-
-    /* style.c */
-    /*set_style(ctx, THEME_WHITE);*/
-    /*set_style(ctx, THEME_RED);*/
-    /*set_style(ctx, THEME_BLUE);*/
-    /*set_style(ctx, THEME_DARK);*/
 
     background = nk_rgb(28,48,62);
     while (running)
@@ -149,12 +145,6 @@ main(int argc, char* argv[])
         }
         nk_end(ctx);
 
-        /* -------------- EXAMPLES ---------------- */
-        /*calculator(ctx);*/
-        /*overview(ctx);*/
-        /*node_editor(ctx);*/
-        /* ----------------------------------------- */
-
         /* Draw */
         {float bg[4];
         nk_color_fv(bg, background);
@@ -162,13 +152,19 @@ main(int argc, char* argv[])
         glViewport(0, 0, win_width, win_height);
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(bg[0], bg[1], bg[2], bg[3]);
+
+		// Blit the texture to screen
+		draw_tex(tex, -0.5f, -0.5f, 1.f, 1.f);
+
         /* IMPORTANT: `nk_sdl_render` modifies some global OpenGL state
          * with blending, scissor, face culling, depth test and viewport and
          * defaults everything back into a default state.
          * Make sure to either a.) save and restore or b.) reset your own state after
          * rendering the UI. */
         nk_sdl_render(NK_ANTI_ALIASING_ON, MAX_VERTEX_MEMORY, MAX_ELEMENT_MEMORY);
-        SDL_GL_SwapWindow(win);}
+
+		// Display
+		SDL_GL_SwapWindow(win);}
     }
 
 cleanup:
@@ -179,3 +175,49 @@ cleanup:
     return 0;
 }
 
+static GLuint load_image_tex(const char *filename)
+{
+	GLuint texid = 0;
+	// Load image from file
+	SDL_Surface *s = IMG_Load(filename);
+	if (s == NULL)
+	{
+		printf("Failed to load image from file %s\n", filename);
+		goto cleanup;
+	}
+	// Convert to RGBA
+	SDL_Surface *tmp = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_ABGR8888, 0);
+	if (tmp == NULL)
+	{
+		printf("Failed to convert surface: %s\n", SDL_GetError());
+		goto cleanup;
+	}
+	SDL_FreeSurface(s);
+	s = tmp;
+	// Convert to texture
+	glGenTextures(1, &texid);
+	glBindTexture(GL_TEXTURE_2D, texid);
+	int mode = GL_RGBA;
+	glTexImage2D(
+		GL_TEXTURE_2D, 0, mode, s->w, s->h, 0, mode, GL_UNSIGNED_BYTE,
+		s->pixels);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+cleanup:
+	SDL_FreeSurface(s);
+	return texid;
+}
+
+static void draw_tex(
+	GLuint texid, const float x, const float y, const float w, const float h)
+{
+	glBindTexture(GL_TEXTURE_2D, texid);
+
+	glBegin(GL_QUADS);
+		glTexCoord2f(0, 1); glVertex3f(x, y, 0);
+		glTexCoord2f(1, 1); glVertex3f(x + w, y, 0);
+		glTexCoord2f(1, 0); glVertex3f(x + w, y + h, 0);
+		glTexCoord2f(0, 0); glVertex3f(x, y + h, 0);
+	glEnd();
+}
