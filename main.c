@@ -41,7 +41,7 @@
  *                          DEMO
  *
  * ===============================================================*/
-static GLuint load_image_tex(const char *filename);
+static struct nk_image load_image(const char *filename, int *w, int *h);
 static void draw_tex(
 	GLuint texid, const float x, const float y, const float w, const float h);
 int
@@ -57,7 +57,8 @@ main(int argc, char* argv[])
     /* Platform */
     SDL_Window *win;
     SDL_GLContext glContext;
-	GLuint tex;
+	struct nk_image tex;
+	int tex_w, tex_h;
     struct nk_color background;
     int win_width, win_height;
     int running = 1;
@@ -82,8 +83,8 @@ main(int argc, char* argv[])
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	tex = load_image_tex(argv[1]);
-	if (tex == 0)
+	tex = load_image(argv[1], &tex_w, &tex_h);
+	if (tex.handle.id == 0)
 	{
 		goto cleanup;
 	}
@@ -142,6 +143,14 @@ main(int argc, char* argv[])
                 background.a = (nk_byte)nk_propertyi(ctx, "#A:", 0, background.a, 255, 1,1);
                 nk_combo_end(ctx);
             }
+
+			nk_layout_row_dynamic(ctx, 20, 1);
+            nk_label(ctx, "Image:", NK_TEXT_LEFT);
+			nk_layout_row_static(
+				ctx,
+				tex_h, tex_w,
+				1);
+			nk_image(ctx, tex);
         }
         nk_end(ctx);
 
@@ -154,7 +163,7 @@ main(int argc, char* argv[])
         glClearColor(bg[0], bg[1], bg[2], bg[3]);
 
 		// Blit the texture to screen
-		draw_tex(tex, -0.5f, -0.5f, 1.f, 1.f);
+		draw_tex(tex.handle.id, -0.5f, -0.5f, 1.f, 1.f);
 
         /* IMPORTANT: `nk_sdl_render` modifies some global OpenGL state
          * with blending, scissor, face culling, depth test and viewport and
@@ -169,13 +178,14 @@ main(int argc, char* argv[])
 
 cleanup:
     nk_sdl_shutdown();
+	glDeleteTextures(1, (const GLuint *)&tex.handle.id);
     SDL_GL_DeleteContext(glContext);
     SDL_DestroyWindow(win);
     SDL_Quit();
     return 0;
 }
 
-static GLuint load_image_tex(const char *filename)
+static struct nk_image load_image(const char *filename, int *w, int *h)
 {
 	GLuint texid = 0;
 	// Load image from file
@@ -203,10 +213,12 @@ static GLuint load_image_tex(const char *filename)
 		s->pixels);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	*w = s->w;
+	*h = s->h;
 
 cleanup:
 	SDL_FreeSurface(s);
-	return texid;
+	return nk_image_id((int)texid);
 }
 
 static void draw_tex(
